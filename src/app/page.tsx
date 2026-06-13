@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { AnalysisProvider, AnalysisResult, ProvidersAvailable } from "@/types";
 import TranscriptInput from "@/components/TranscriptInput";
 import TranscriptPanel from "@/components/TranscriptPanel";
 import ResultsPanel from "@/components/ResultsPanel";
 import ProviderSelector from "@/components/ProviderSelector";
 import AnalyzeButton from "@/components/AnalyzeButton";
+
+const MIN_PANEL_WIDTH = 240;
+const MAX_PANEL_WIDTH = 800;
+const DEFAULT_PANEL_WIDTH = 420;
 
 export default function Home() {
   const [transcript, setTranscript] = useState("");
@@ -17,6 +21,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [available, setAvailable] = useState<ProvidersAvailable>({ claude: false, openai: false });
   const [showInput, setShowInput] = useState(true);
+
+  // Resizable panel state
+  const [rightPanelWidth, setRightPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/providers")
@@ -29,6 +40,44 @@ export default function Home() {
       })
       .catch(() => {});
   }, []);
+
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = rightPanelWidth;
+    setIsDragging(true);
+  }, [rightPanelWidth]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = dragStartX.current - e.clientX;
+      const newWidth = dragStartWidth.current + delta;
+      const clampedWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, newWidth));
+
+      // Also clamp to not exceed container width minus minimum left panel size
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth;
+        const maxAllowed = containerWidth - MIN_PANEL_WIDTH;
+        setRightPanelWidth(Math.min(clampedWidth, maxAllowed));
+      } else {
+        setRightPanelWidth(clampedWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging]);
 
   const activeQuote =
     activeId
@@ -74,7 +123,10 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div
+      className="flex flex-col h-screen bg-gray-50"
+      style={isDragging ? { userSelect: "none", cursor: "col-resize" } : undefined}
+    >
       {/* Header */}
       <header className="shrink-0 bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4 flex-wrap">
         <div className="flex-1 min-w-0">
@@ -97,9 +149,9 @@ export default function Home() {
       )}
 
       {/* Main panels */}
-      <div className="flex flex-1 min-h-0 divide-x divide-gray-200">
+      <div ref={containerRef} className="flex flex-1 min-h-0">
         {/* Left: Transcript */}
-        <div className="flex flex-col flex-1 min-w-0 bg-white">
+        <div className="flex flex-col flex-1 min-w-0 bg-white border-r border-gray-200">
           <div className="shrink-0 px-4 py-2 border-b border-gray-100 flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Transcript</span>
             {analysisResult && (
@@ -126,8 +178,29 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Resizable Divider */}
+        <div
+          onMouseDown={handleDividerMouseDown}
+          className={`relative shrink-0 w-1 cursor-col-resize group transition-colors ${
+            isDragging ? "bg-blue-400" : "bg-gray-200 hover:bg-blue-300"
+          }`}
+          title="Drag to resize panels"
+        >
+          {/* Drag handle indicator */}
+          <div className={`absolute inset-y-0 -left-1 -right-1 flex items-center justify-center`}>
+            <div className={`flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isDragging ? "opacity-100" : ""}`}>
+              <div className="w-0.5 h-4 bg-gray-400 rounded-full" />
+              <div className="w-0.5 h-4 bg-gray-400 rounded-full" />
+              <div className="w-0.5 h-4 bg-gray-400 rounded-full" />
+            </div>
+          </div>
+        </div>
+
         {/* Right: Results */}
-        <div className="flex flex-col w-[420px] shrink-0 bg-white">
+        <div
+          className="flex flex-col shrink-0 bg-white"
+          style={{ width: `${rightPanelWidth}px` }}
+        >
           <div className="shrink-0 px-4 py-2 border-b border-gray-100">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Analysis Results</span>
           </div>
