@@ -258,6 +258,32 @@ describe('analyzeLocally — speaker handling', () => {
     const unknownItems = allItems.filter((i) => i.speaker === 'unknown');
     expect(unknownItems.length).toBeGreaterThanOrEqual(0);
   });
+
+  it('does NOT extract factual statements from agent speech', () => {
+    const transcript = [
+      'Agent: Your employer needs to sponsor you under a 482 visa.',
+      'Agent: I see your visa expires on 15/06/2025.',
+      'Agent: Your spouse would need a dependent or partner visa.',
+      'Client: Hello.',
+    ].join('\n');
+
+    const { facts } = analyzeLocally(transcript);
+    const agentFacts = facts.filter((f) => f.speaker === 'agent');
+    expect(agentFacts).toHaveLength(0);
+  });
+
+  it('extracts facts from client speech but not from agent speech in the same transcript', () => {
+    const transcript = [
+      'Agent: Do you have a 482 visa?',
+      'Client: Yes, I am on a 482 visa sponsored by my employer TechCorp.',
+    ].join('\n');
+
+    const { facts } = analyzeLocally(transcript);
+    expect(facts.length).toBeGreaterThan(0);
+    facts.forEach((f) => {
+      expect(f.speaker).not.toBe('agent');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
