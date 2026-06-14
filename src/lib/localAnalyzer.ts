@@ -115,7 +115,7 @@ export function analyzeLocally(transcript: string): AnalysisResult {
           quote: sentence,
           speaker: turn.speaker,
         });
-      } else if (isFactualSentence(sentence)) {
+      } else if (isClient && isFactualSentence(sentence)) {
         const id = `fact-${String(++factCounter).padStart(3, "0")}`;
         facts.push({
           id,
